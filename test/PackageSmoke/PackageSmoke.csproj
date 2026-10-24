@@ -9,7 +9,7 @@
     <ProjectReference Include="../../src/Analyser/Analyser.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(UsePackages)' == 'true'">
-    <PackageReference Include="Kekincai.JiebaNet.Segmenter" Version="1.0.0" />
-    <PackageReference Include="Kekincai.JiebaNet.Analyser" Version="1.0.0" />
+    <PackageReference Include="Kekincai.JiebaNet.Segmenter" Version="$(Version)" />
+    <PackageReference Include="Kekincai.JiebaNet.Analyser" Version="$(Version)" />
   </ItemGroup>
 </Project>

@@ -28,6 +28,8 @@ dotnet test jieba.NET.sln -c Release
 
 需要 TF-IDF/TextRank 时再引用 Analyser 项目或包。
 
+应用接入、仓库内本地包源、GitHub Actions 和以后发布到 NuGet.org 的完整步骤见 [应用与 CI 接入说明](docs/consuming-packages.md)。
+
 ## 分词
 
 ```csharp
