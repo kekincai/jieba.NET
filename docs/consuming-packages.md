@@ -2,9 +2,19 @@
 
 普通分词引用 `Kekincai.JiebaNet.Segmenter`；需要 TF-IDF/TextRank 时引用 `Kekincai.JiebaNet.Analyser`，它会自动依赖 Segmenter。当前版本是 `1.0.0`，两个包均面向 .NET 10。
 
-**当前可以复制 `.nupkg` 到应用仓库作为本地 NuGet 源，并通过 PackageReference 引用。** 不需要复制源码、解压包或手工引用 DLL。以后公开发布到 NuGet.org，就不必把包放进应用仓库。
+**推荐直接从 NuGet.org 安装公开包，不需要复制 `.nupkg`、源码或 DLL 到应用仓库。**
 
-## 当前可直接使用：仓库内本地源
+```powershell
+dotnet add path/to/MyApp.Server.csproj package Kekincai.JiebaNet.Segmenter --version 1.0.0
+# 需要 TF-IDF/TextRank 时：
+dotnet add path/to/MyApp.Server.csproj package Kekincai.JiebaNet.Analyser --version 1.0.0
+```
+
+提交生成的 PackageReference 即可。现有 GitHub Actions 的 `dotnet build` 会通过 nuget.org 自动还原；发布时自动包含库和内嵌词典。原来配置过本库本地源的项目，应移除 `repo-packages` 及其 `Kekincai.JiebaNet.*` 映射，再移除不再使用的 vendored 包，避免映射继续要求从本地读取。
+
+以下仓库内本地源方案用于未发布版本、离线环境或本机验证。
+
+## 可选：仓库内本地源
 
 以下操作都在“使用本库的应用仓库”里进行，不是在本库仓库中。
 
@@ -169,7 +179,7 @@ dotnet restore --packages artifacts/nuget-clean-check
 
 ## 长期公开分发：发布到 NuGet.org
 
-多个项目或外部使用者开始使用后，推荐把本库正式发布到 NuGet.org，应用只保留 PackageReference，不再提交二进制包。发布本身需要先准备 NuGet.org 账号并确认包名可用；目前本库仅有本地产物，不能假定示例版本已能从 NuGet.org 安装。
+多个项目或外部使用者开始使用后，推荐把本库正式发布到 NuGet.org，应用只保留 PackageReference，不再提交二进制包。`1.0.0` 已上传到 NuGet.org；后续版本需要等待各自发布、验证和索引完成后才能安装。
 
 本库已配置账号 `kekincai` 的 GitHub OIDC 发布流程，首次使用需创建 NuGet.org 可信发布策略，具体字段及标签发布步骤见 [NuGet 发布说明](publishing.md)。
 
@@ -187,7 +197,7 @@ dotnet restore --packages artifacts/nuget-clean-check
 
 | 方式 | 应用 Actions 能否直接复现 | 用途 |
 |---|---|---|
-| 仓库内 `.nupkg` + 相对本地源 | 可以，包和配置必须提交 | 当前无需发布账号就能使用 |
+| 仓库内 `.nupkg` + 相对本地源 | 可以，包和配置必须提交 | 离线或未发布版本使用 |
 | NuGet.org + 固定版本 PackageReference | 可以，版本必须已发布 | 长期公开分发推荐 |
 | 相邻目录 ProjectReference | 只 checkout 应用仓库时不可以 | 两个仓库在本机共同开发 |
 | 手工引用本地 DLL | 需要自行维护 DLL/依赖/版本 | 不作为推荐分发方式 |

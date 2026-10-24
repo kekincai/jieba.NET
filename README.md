@@ -20,7 +20,15 @@ dotnet test jieba.NET.sln -c Release
 
 `verify.ps1` 还会审计传递依赖、生成 NuGet 包，并用真正安装的本地包验证单文件发布、内嵌资源、外部资源、损坏/缺失模型和命令行工具。测试中的两项旧手工性能演示保留为忽略状态；实际性能测试见下文。
 
-包名为 `Kekincai.JiebaNet.Segmenter` 和 `Kekincai.JiebaNet.Analyser`，当前版本 `1.0.0`。生成结果位于 `artifacts/packages`，尚未发布到 NuGet.org。项目引用也可直接使用：
+包名为 `Kekincai.JiebaNet.Segmenter` 和 `Kekincai.JiebaNet.Analyser`，当前版本 `1.0.0`。已发布到 NuGet.org：[Segmenter](https://www.nuget.org/packages/Kekincai.JiebaNet.Segmenter/1.0.0)、[Analyser](https://www.nuget.org/packages/Kekincai.JiebaNet.Analyser/1.0.0)。应用可直接安装：
+
+```powershell
+dotnet add package Kekincai.JiebaNet.Segmenter --version 1.0.0
+# 需要 TF-IDF/TextRank 时安装 Analyser，会自动依赖 Segmenter。
+dotnet add package Kekincai.JiebaNet.Analyser --version 1.0.0
+```
+
+本地构建的包仍位于 `artifacts/packages`。共同开发时也可直接引用项目：
 
 ```xml
 <ProjectReference Include="PATH/TO/jieba.NET/src/Segmenter/Segmenter.csproj" />
