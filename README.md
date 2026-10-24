@@ -1,6 +1,6 @@
 # jieba.NET for .NET 10
 
-这是 [anderscui/jieba.NET](https://github.com/anderscui/jieba.NET) 的现代化分支，用于后续接入 VideoCleaner。目标框架统一为 `net10.0`，保留 `JiebaNet.Segmenter` / `JiebaNet.Analyser` 命名空间和主要 API。
+这是 [anderscui/jieba.NET](https://github.com/anderscui/jieba.NET) 的现代化分支。目标框架为 `net10.0`，保留 `JiebaNet.Segmenter` / `JiebaNet.Analyser` 命名空间和主要 API。
 
 - 核心库与分析库没有第三方运行时包依赖；模型使用内置 `System.Text.Json`。
 - 默认词典和模型内嵌到程序集，无需复制 Resources，也无需 app.config/web.config。
@@ -71,7 +71,7 @@ second.LoadUserDict("second.txt");
 // 也可 WordDictionary.Create("/absolute/path/to/main-dict.txt") 指定独立主词典。
 ```
 
-独立词典拥有自己的 Trie，因而需要额外词典内存；HMM 模型仍共享。**N100 上的 VideoCleaner 建议注册并复用一个分词器实例**，在启动时加载用户词典，避免为每个文件或请求创建独立词典。`CutInParallel` 等并行 API 是显式选择；普通 `Cut` 不启动并行任务。增删词与读取使用读写锁，单次分词不会读到一半更新的词典。
+独立词典拥有自己的 Trie，因而需要额外词典内存；HMM 模型仍共享。**服务中建议注册并复用一个分词器实例**，在启动时加载用户词典，避免为每个文件或请求创建独立词典。`CutInParallel` 等并行 API 是显式选择；普通 `Cut` 不启动并行任务。增删词与读取使用读写锁，单次分词不会读到一半更新的词典。
 
 包含空格的短语或忽略大小写的关键词匹配可用 `KeywordProcessor`，不改变中文分词算法的默认边界规则：
 
@@ -106,7 +106,7 @@ ConfigManager.ConfigFileBaseDir = Path.Combine(AppContext.BaseDirectory, "jieba-
 
 显式目录必须包含所用功能需要的资源，缺失时明确失败；不会悄悄退回内嵌模型。初始化后更改目录会抛出异常，防止词典和模型混用。原来的 app.config/web.config 配置项已移除。路径属性默认表示资源的逻辑名称；读取内嵌资源使用 `ConfigManager.OpenRead` 或 `ReadLines`，不能假定磁盘上存在同名文件。
 
-## 命令行与 N100 性能
+## 命令行与性能测量
 
 ```powershell
 dotnet run --project src/Segmenter.Cli -c Release -- --file input.txt
@@ -116,7 +116,7 @@ dotnet run --project src/Segmenter.Cli -c Release -- --file input.txt --no-hmm -
 
 命令行逐行读取，正常退出后不等待回车；错误输出到 stderr，参数错误返回 2，运行/文件错误返回 1。`--help` 显示全部选项。
 
-性能工具使用固定的 16 个媒体文件名，默认每轮 20,000 次单线程调用，5 轮取中位数，每种模式默认启动 3 个独立进程；先预热 50,000 次并等待 1 秒。本次 N100 报告使用每轮 100,000 次的长采样。冷调用、初始化后托管内存、工作集、吞吐和每文件分配量分别记录。见 [迁移与验证记录](docs/modernization.md)、[Python 对照](docs/python-parity.md) 和 [上游 issue 对照](docs/upstream-issues.md)。
+性能工具使用固定的 16 个媒体文件名，默认每轮 20,000 次单线程调用，5 轮取中位数，每种模式默认启动 3 个独立进程；先预热 50,000 次并等待 1 秒。性能报告使用每轮 100,000 次的长采样。冷调用、初始化后托管内存、工作集、吞吐和每文件分配量分别记录。见 [迁移与验证记录](docs/modernization.md)、[Python 对照](docs/python-parity.md) 和 [上游 issue 对照](docs/upstream-issues.md)。
 
 本分支不支持旧 .NET Framework/.NET Core 2.x，也不声称支持 Native AOT、裁剪、日语/韩语形态分析或 Paddle 模式。默认模型内嵌已验证适用于普通和非裁剪单文件发布。
 

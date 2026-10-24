@@ -25,7 +25,9 @@ namespace JiebaNet.Analyser
                    && !StopWords.Contains(wp.Word.ToLowerInvariant());
         }
 
-        public TextRankExtractor(JiebaSegmenter segmenter = null)
+        public TextRankExtractor() : this(null) { }
+
+        public TextRankExtractor(JiebaSegmenter segmenter)
         {
             Span = 5;
 

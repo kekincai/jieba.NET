@@ -51,7 +51,8 @@ try
     var pos = new PosSegmenter(segmenter);
     Assert(pos.Cut("北京").Any(pair => pair.Word == "北京" && pair.Flag == "ns"), "part-of-speech model");
     Assert(new TfidfExtractor().ExtractTags("北京清华大学自然语言处理研究").Any(), "TF-IDF model");
-    Assert(new TextRankExtractor().ExtractTags("北京清华大学自然语言处理研究").Any(), "TextRank model");
+    var rank = (TextRankExtractor)Activator.CreateInstance(typeof(TextRankExtractor))!;
+    Assert(rank.ExtractTags("北京清华大学自然语言处理研究").Any(), "TextRank model and parameterless factory construction");
     if (mode == "external")
         Assert(segmenter.Cut("外部词典回归专用词").SequenceEqual(new[] { "外部词典回归专用词" }), "external dictionary override");
     Console.WriteLine($"PASS {mode}: segmentation, search, POS, TF-IDF and TextRank");
