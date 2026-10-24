@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Globalization;
+using JiebaNet.Segmenter;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -27,18 +29,23 @@ namespace JiebaNet.Analyser
             var idfPath = Path.GetFullPath(newIdfPath);
             if (IdfFilePath != idfPath)
             {
-                IdfFilePath = idfPath;
-                var lines = File.ReadAllLines(idfPath, Encoding.UTF8);
-                IdfFreq = new Dictionary<string, double>();
-                foreach (var line in lines)
+                var frequencies = new Dictionary<string, double>(System.StringComparer.Ordinal);
+                var lineNumber = 0;
+                foreach (var line in ConfigManager.ReadLines(idfPath))
                 {
-                    var parts = line.Trim().Split(' ');
-                    var word = parts[0];
-                    var freq = double.Parse(parts[1]);
-                    IdfFreq[word] = freq;
+                    lineNumber++;
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var parts = line.Trim().Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length != 2 || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var frequency)
+                        || !double.IsFinite(frequency) || frequency < 0)
+                        throw new InvalidDataException($"Invalid IDF entry at line {lineNumber}.");
+                    frequencies[parts[0]] = frequency;
                 }
-
-                MedianIdf = IdfFreq.Values.OrderBy(v => v).ToList()[IdfFreq.Count / 2];
+                if (frequencies.Count == 0) throw new InvalidDataException("The IDF dictionary is empty.");
+                var median = frequencies.Values.OrderBy(value => value).ElementAt(frequencies.Count / 2);
+                IdfFreq = frequencies;
+                MedianIdf = median;
+                IdfFilePath = idfPath;
             }
         }
     }

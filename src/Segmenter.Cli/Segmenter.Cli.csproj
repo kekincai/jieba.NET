@@ -1,25 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp2.0;net40;net45</TargetFrameworks>
     <AssemblyName>JiebaNet.Segmenter.Cli</AssemblyName>
     <RootNamespace>JiebaNet.Segmenter.Cli</RootNamespace>
-    <Version>0.42.2</Version>
-    <Description>Console app for jieba.NET.</Description>
-    <Company>andersc</Company>
-    <Authors>andersc</Authors>
-    <Copyright>Copyright © andersc 2020</Copyright>
-    <RepositoryUrl>https://github.com/anderscui/jieba.NET/</RepositoryUrl>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.7.82" />
+    <ProjectReference Include="../Segmenter/Segmenter.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Analyser\Analyser.csproj" />
-    <ProjectReference Include="..\Segmenter\Segmenter.csproj" />
-  </ItemGroup>
-
 </Project>

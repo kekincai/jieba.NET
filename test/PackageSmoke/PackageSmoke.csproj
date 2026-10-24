@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(UsePackages)' != 'true'">
+    <ProjectReference Include="../../src/Segmenter/Segmenter.csproj" />
+    <ProjectReference Include="../../src/Analyser/Analyser.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePackages)' == 'true'">
+    <PackageReference Include="Kekincai.JiebaNet.Segmenter" Version="1.0.0" />
+    <PackageReference Include="Kekincai.JiebaNet.Analyser" Version="1.0.0" />
+  </ItemGroup>
+</Project>

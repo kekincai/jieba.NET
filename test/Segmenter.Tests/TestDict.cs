@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using NUnit.Framework;
 
@@ -12,7 +12,8 @@ namespace JiebaNet.Segmenter.Tests
         {
             var mainDict = ConfigManager.MainDictFile;
             Assert.That(mainDict, Is.Not.Null);
-            Assert.That(File.Exists(mainDict));
+            using var stream = ConfigManager.OpenRead(mainDict);
+            Assert.That(stream.Length, Is.GreaterThan(0));
         }
 
         [TestCase]

@@ -53,7 +53,7 @@ namespace JiebaNet.Analyser
             }
 
             // TODO: 10 iterations?
-            var sortedKeys = Graph.Keys.OrderBy(k => k);
+            var sortedKeys = Graph.Keys.OrderBy(k => k, StringComparer.Ordinal);
             for (var i = 0; i < 10; i++)
             {
                 foreach (var n in sortedKeys)

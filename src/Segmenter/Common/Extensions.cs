@@ -1,14 +1,20 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace JiebaNet.Segmenter.Common
 {
-    public static class Extensions
+    public static partial class Extensions
     {
-        private static readonly Regex RegexDigits = new Regex(@"\d+", RegexOptions.Compiled);
-        private static readonly Regex RegexNewline = new Regex("(\r\n|\n|\r)", RegexOptions.Compiled);
+        [GeneratedRegex(@"\d+")]
+        private static partial Regex CreateRegexDigits();
+
+        [GeneratedRegex("(\r\n|\n|\r)")]
+        private static partial Regex CreateRegexNewline();
+
+        private static readonly Regex RegexDigits = CreateRegexDigits();
+        private static readonly Regex RegexNewline = CreateRegexNewline();
 
         #region Objects
 
@@ -39,16 +45,12 @@ namespace JiebaNet.Segmenter.Common
 
         public static TValue GetOrDefault<TKey, TValue>(this IDictionary<TKey, TValue> d, TKey key)
         {
-            return d.ContainsKey(key) ? d[key] : default(TValue);
+            return d.TryGetValue(key, out var value) ? value : default(TValue);
         }
 
         public static TValue GetDefault<TKey, TValue>(this IDictionary<TKey, TValue> dict, TKey key, TValue defaultValue)
         {
-            if (dict.ContainsKey(key))
-            {
-                return dict[key];
-            }
-            return defaultValue;
+            return dict.TryGetValue(key, out var value) ? value : defaultValue;
         }
         
         public static IDictionary<TKey, TValue> SetDefault<TKey, TValue>(this IDictionary<TKey, TValue> dict, TKey key, TValue defaultValue)

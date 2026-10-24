@@ -1,132 +1,88 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
-using CommandLine;
 using JiebaNet.Segmenter.PosSeg;
 
 namespace JiebaNet.Segmenter.Cli
 {
-    class Options
-    {
-        [Option('h', "help")]
-        public bool ShowHelp { get; set; }
-
-        [Option('v', "version")]
-        public bool ShowVersion { get; set; }
-
-        [Option('f', "file", Required = false)]
-        public string FileName { get; set; }
-
-        [Option('d', "delimiter", Default = "/ ")]
-        public string Delimiter { get; set; }
-
-        [Option('p', "pos")]
-        public bool POS { get; set; }
-
-        //[Option('u', "user-dict")]
-        //public string UserDict { get; set; }
-
-        [Option('a', "cut-all")]
-        public bool CutAll { get; set; }
-
-        [Option('n', "no-hmm")]
-        public bool NoHmm { get; set; }
-
-        //[Option('q', "quiet")]
-        //public bool Quiet { get; set; }
-
-        public string GetUsage()
-        {
-            var usage = new StringBuilder();
-            usage.AppendLine();
-            usage.AppendLine("jieba.NET options and parameters: ");
-            usage.AppendLine();
-            usage.AppendLine("-f \t --file \t the file name, required.");
-            usage.AppendLine();
-            usage.AppendLine("-d \t --delimiter \t the delimiter between tokens, default: / .");
-            usage.AppendLine("-a \t --cut-all \t use cut_all mode.");
-            usage.AppendLine("-n \t --no-hmm \t don't use HMM.");
-            usage.AppendLine("-p \t --pos \t enable POS tagging.");
-
-
-            usage.AppendLine("-v \t --version \t show version info.");
-            usage.AppendLine("-h \t --help \t show help details.");
-            usage.AppendLine();
-            usage.AppendLine("sample usages: ");
-            usage.AppendLine("$ jiebanet -f input.txt > output.txt");
-            usage.AppendLine("$ jiebanet -d | -f input.txt > output.txt");
-            usage.AppendLine("$ jiebanet -p -f input.txt > output.txt");
-
-            return usage.ToString();
-        }
-    }
-
     public class Program
     {
-        static void Main(string[] args)
+        public static int Main(string[] args)
         {
-            Parser.Default.ParseArguments<Options>(args)
-                .WithParsed(RunOptions)
-                .WithNotParsed((Console.WriteLine));
-
-            Console.ReadLine();
-        }
-
-        private static void RunOptions(Options options)
-        {
-            var seg = new JiebaSegmenter();
-
-            if (options.ShowHelp)
+            Console.OutputEncoding = new UTF8Encoding(false);
+            try
             {
-                Console.WriteLine(options.GetUsage());
-                return;
-            }
-
-            if (options.ShowVersion)
-            {
-                Console.WriteLine("jieba.NET 0.41");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(options.FileName))
-            {
-                Console.WriteLine("No file specified");
-                return;
-            }
-
-            SegmentFile(options);
-        }
-
-        private static void SegmentFile(Options options)
-        {
-            var result = new List<string>();
-
-            var fileName = Path.GetFullPath(options.FileName);
-            var lines = File.ReadAllLines(fileName);
-
-            Func<string, bool, bool, IEnumerable<string>> cutMethod = null;
-            var segmenter = new JiebaSegmenter();
-            if (options.POS)
-            {
-                cutMethod = (text, cutAll, hmm) =>
+                string file = null, delimiter = "/ ", userDictionary = null, resources = null;
+                bool cutAll = false, noHmm = false, pos = false;
+                for (var i = 0; i < args.Length; i++)
                 {
-                    var posSeg = new PosSegmenter(segmenter);
-                    return posSeg.Cut(text, hmm).Select(token => string.Format("{0}/{1}", token.Word, token.Flag));
-                };
+                    var argument = args[i];
+                    var equals = argument.StartsWith("--", StringComparison.Ordinal) ? argument.IndexOf('=') : -1;
+                    var option = equals >= 0 ? argument.Substring(0, equals) : argument;
+                    string Value()
+                    {
+                        if (equals >= 0) return argument.Substring(equals + 1);
+                        if (++i >= args.Length) throw new ArgumentException($"Missing value for {option}.");
+                        return args[i];
+                    }
+                    if (equals >= 0 && option is not ("--file" or "--delimiter" or "--user-dict" or "--resources"))
+                        throw new ArgumentException($"Unknown option: {argument}");
+                    switch (option)
+                    {
+                        case "-h": case "--help": Console.WriteLine(Usage); return 0;
+                        case "-v": case "--version":
+                            var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                            Console.WriteLine($"jieba.NET {version}"); return 0;
+                        case "-f": case "--file": file = Value(); break;
+                        case "-d": case "--delimiter": delimiter = Value(); break;
+                        case "-u": case "--user-dict": userDictionary = Value(); break;
+                        case "--resources": resources = Value(); break;
+                        case "-a": case "--cut-all": cutAll = true; break;
+                        case "-n": case "--no-hmm": noHmm = true; break;
+                        case "-p": case "--pos": pos = true; break;
+                        default: throw new ArgumentException($"Unknown option: {argument}");
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(file)) throw new ArgumentException("Specify an input file with --file.");
+                if (resources != null) ConfigManager.ConfigFileBaseDir = resources;
+                var segmenter = new JiebaSegmenter();
+                if (userDictionary != null) segmenter.LoadUserDict(userDictionary);
+                var posSegmenter = pos ? new PosSegmenter(segmenter) : null;
+                foreach (var line in File.ReadLines(file, Encoding.UTF8))
+                {
+                    var words = pos
+                        ? posSegmenter.Cut(line, hmm: !noHmm).Select(token => $"{token.Word}/{token.Flag}")
+                        : segmenter.Cut(line, cutAll: cutAll, hmm: !noHmm);
+                    Console.WriteLine(string.Join(delimiter, words));
+                }
+                return 0;
             }
-            else
+            catch (ArgumentException exception)
             {
-                cutMethod = segmenter.Cut;
+                Console.Error.WriteLine(exception.Message);
+                return 2;
             }
-
-            var delimiter = string.IsNullOrWhiteSpace(options.Delimiter) ? "/ " : options.Delimiter;
-            foreach (var line in lines)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                or System.Text.Json.JsonException or TypeInitializationException or InvalidOperationException)
             {
-                result.Add(string.Join(delimiter, cutMethod(line, options.CutAll, options.NoHmm)));
+                Console.Error.WriteLine(exception.GetBaseException().Message);
+                return 1;
             }
-            Console.WriteLine(string.Join(Environment.NewLine, result));
         }
+
+        private const string Usage = """
+            jieba.NET — Chinese text segmentation for .NET 10
+            -f, --file PATH        UTF-8 input file (required)
+            -d, --delimiter TEXT   Token separator (default: / )
+            -a, --cut-all          Full segmentation mode
+            -n, --no-hmm           Disable the hidden Markov model
+            -p, --pos              Emit word/part-of-speech pairs
+            -u, --user-dict PATH   Load a user dictionary
+                --resources DIR   Use an external resource directory
+            -v, --version         Show version
+            -h, --help            Show help
+            """;
     }
 }

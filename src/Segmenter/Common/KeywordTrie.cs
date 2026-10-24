@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -63,8 +63,7 @@ namespace JiebaNet.Segmenter.Common
 
         public void Remove(string key)
         {
-            // TODO: impl and count
-            this[key] = null;
+            if (Contains(key)) this[key] = null;
         }
 
         public string this[string key]
@@ -101,12 +100,10 @@ namespace JiebaNet.Segmenter.Common
                 }
                 else
                 {
-                    var child = state.GetChild(key[i]);
+                    var existed = state.GetChild(key[i])?.HasValue ?? false;
                     state = state.AddChild(key[i], value, true);
-                    if (child.IsNull() || !child.HasValue)
-                    {
-                        Count += 1;
-                    }
+                    if (!existed && value != null) Count++;
+                    else if (existed && value == null) Count--;
                 }
             }
         }

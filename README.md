@@ -1,285 +1,125 @@
-jieba.NET是[jieba中文分词](https://github.com/fxsjy/jieba)的.NET版本（C#实现）。
+# jieba.NET for .NET 10
 
-当前版本为0.42.2，基于jieba 0.42，提供与jieba**基本一致**的功能与接口，但不支持其最新的paddle模式。关于jieba的实现思路，可以看看[这篇wiki](https://github.com/anderscui/jieba.NET/wiki/%E7%90%86%E8%A7%A3%E7%BB%93%E5%B7%B4%E5%88%86%E8%AF%8D)里提到的资料。
+这是 [anderscui/jieba.NET](https://github.com/anderscui/jieba.NET) 的现代化分支，用于后续接入 VideoCleaner。目标框架统一为 `net10.0`，保留 `JiebaNet.Segmenter` / `JiebaNet.Analyser` 命名空间和主要 API。
 
-此外，也提供了 `KeywordProcessor`，参考 [FlashText](https://github.com/vi3k6i5/flashtext) 实现。`KeywordProcessor` 可以更灵活地从文本中提取**词典中的关键词**，比如忽略大小写、含空格的词等。
+- 核心库与分析库没有第三方运行时包依赖；模型使用内置 `System.Text.Json`。
+- 默认词典和模型内嵌到程序集，无需复制 Resources，也无需 app.config/web.config。
+- 默认单线程分词；词典、HMM 模型按需初始化，支持共享实例并发读取。
+- 提供显式独立词典，避免不同任务的用户词典互相污染。
+- 使用固定版本官方 Python jieba 生成的参考结果持续验证算法。
 
-如果您在开发中遇到与分词有关的需求或困难，请提交一个Issue，I see u:)
+## 构建与验证
 
-## 特点
+安装 .NET 10 SDK，在仓库目录运行：
 
-* 支持三种分词模式：
-    - 精确模式，试图将句子最精确地切开，适合**文本分析**；
-    - 全模式，把句子中所有的可以成词的词语都扫描出来, **速度非常快，但是不能解决歧义**。具体来说，分词过程不会借助于词频查找最大概率路径，亦不会使用HMM；
-    - 搜索引擎模式，在精确模式的基础上，对长词再次切分，提高召回率，**适合用于搜索引擎分词**。
-* 支持**繁体分词**
-* 支持添加自定义词典和自定义词
-* MIT 授权协议
-
-## 算法
-
-* 基于前缀词典实现高效的词图扫描，生成句子中汉字所有可能成词情况所构成的有向无环图 (DAG)
-* 采用了动态规划查找最大概率路径, 找出基于词频的最大切分组合
-* 对于未登录词，采用了基于汉字成词能力的HMM模型，使用了Viterbi算法
-
-## 安装和配置
-
-当前版本支持net40、net45和netstandard2.0，可以手动引用项目，也可以通过NuGet添加引用：
-
-```shell
-PM> Install-Package jieba.NET
+```powershell
+dotnet build jieba.NET.sln -c Release
+dotnet test jieba.NET.sln -c Release
+./scripts/verify.ps1
 ```
 
-安装之后，在packages\jieba.NET目录下可以看到Resources目录，这里面是jieba.NET运行所需的词典及其它数据文件，最简单的配置方法是将整个Resources目录拷贝到程序集所在目录，这样jieba.NET会使用内置的默认配置值。如果希望将这些文件放在其它位置，则要在app.config或web.config中添加如下的配置项：
+`verify.ps1` 还会审计传递依赖、生成 NuGet 包，并用真正安装的本地包验证单文件发布、内嵌资源、外部资源、损坏/缺失模型和命令行工具。测试中的两项旧手工性能演示保留为忽略状态；实际性能测试见下文。
+
+包名为 `Kekincai.JiebaNet.Segmenter` 和 `Kekincai.JiebaNet.Analyser`，当前版本 `1.0.0`。生成结果位于 `artifacts/packages`，尚未发布到 NuGet.org。项目引用也可直接使用：
 
 ```xml
-<appSettings>
-    <add key="JiebaConfigFileDir" value="C:\jiebanet\config" />
-</appSettings>
+<ProjectReference Include="PATH/TO/jieba.NET/src/Segmenter/Segmenter.csproj" />
 ```
 
-需要注意的是，这个路径可以使用绝对路径或相对路径。**如果使用相对路径，那么jieba.NET会假设该路径是相对于当前应用程序域的BaseDirectory**。
+需要 TF-IDF/TextRank 时再引用 Analyser 项目或包。
 
-配置示例：
+## 分词
 
-* 采用绝对路径时，比如配置项为C:\jiebanet\config，那么主词典的路径会拼接为：C:\jiebanet\config\dict.txt。
-* 采用相对路径时（或未添加任何配置项，那么将会使用默认的**相对路径：Resources**），比如配置项为..\config（可通过..来调整相对路径），若当前应用程序域的BaseDirectory是C:\myapp\bin\，那么主词典的路径会拼接为：C:\myapp\config\dict.txt。
+```csharp
+using JiebaNet.Segmenter;
 
-### 使用代码配置词典路径
-
-如果因为某些原因，不方便通过应用的 config 文件配置，可使用代码设置（在使用任何分词功能之前，建议使用绝对路径），如：
-
-```c#
-JiebaNet.Segmenter.ConfigManager.ConfigFileBaseDir = @"C:\jiebanet\config";
-```
-
-## 主要功能
-
-### 1. 分词
-
-* `JiebaSegmenter.Cut`方法接受三个输入参数，text为待分词的字符串；cutAll指定是否采用全模式；hmm指定使用是否使用hmm模型切分未登录词；返回类型为`IEnumerable<string>`
-* `JiebaSegmenter.CutForSearch`方法接受两个输入参数，text为待分词的字符串；hmm指定使用是否使用hmm模型；返回类型为`IEnumerable<string>`
-
-代码示例
-
-```c#
 var segmenter = new JiebaSegmenter();
-var segments = segmenter.Cut("我来到北京清华大学", cutAll: true);
-Console.WriteLine("【全模式】：{0}", string.Join("/ ", segments));
-
-segments = segmenter.Cut("我来到北京清华大学");  // 默认为精确模式
-Console.WriteLine("【精确模式】：{0}", string.Join("/ ", segments));
-
-segments = segmenter.Cut("他来到了网易杭研大厦");  // 默认为精确模式，同时也使用HMM模型
-Console.WriteLine("【新词识别】：{0}", string.Join("/ ", segments));
-
-segments = segmenter.CutForSearch("小明硕士毕业于中国科学院计算所，后在日本京都大学深造"); // 搜索引擎模式
-Console.WriteLine("【搜索引擎模式】：{0}", string.Join("/ ", segments));
-
-segments = segmenter.Cut("结过婚的和尚未结过婚的");
-Console.WriteLine("【歧义消除】：{0}", string.Join("/ ", segments));
+var words = segmenter.Cut("我来到北京清华大学");
+// 我 / 来到 / 北京 / 清华大学
+var searchWords = segmenter.CutForSearch("清华大学");
+var allWords = segmenter.Cut("北京清华大学", cutAll: true);
+var withoutHmm = segmenter.Cut("北京旅行合影.jpg", hmm: false);
 ```
 
-输出
+精确模式适合词云、推荐和词语统计；搜索模式会额外输出词典中存在的短词，适合提升搜索召回率。`Cut` 保留空格和标点，不自动移除停用词；停用词属于关键词提取和应用业务过滤。
 
-```
-【全模式】：我/ 来到/ 北京/ 清华/ 清华大学/ 华大/ 大学
-【精确模式】：我/ 来到/ 北京/ 清华大学
-【新词识别】：他/ 来到/ 了/ 网易/ 杭研/ 大厦
-【搜索引擎模式】：小明/ 硕士/ 毕业/ 于/ 中国/ 科学/ 学院/ 科学院/ 中国科学院/ 计算/ 计算所/ ，/ 后/ 在/ 日本/ 京都/ 大学/ 日本京都大学/ 深造
-【歧义消除】：结过婚/ 的/ 和/ 尚未/ 结过婚/ 的
-```
+`Tokenize` 返回的 `StartIndex` / `EndIndex` 是 **UTF-16 下标、左闭右开区间**，可以直接用于 C# 的 `text.Substring(start, end - start)`。emoji 和补充平面字符保持完整。Python 的下标以 Unicode 码点计数，含补充字符时数字不能直接混用。
 
+## 用户词典、词性与实例隔离
 
-### 2. 添加自定义词典
+```csharp
+segmenter.LoadUserDict(Path.Combine(AppContext.BaseDirectory, "user_dict.txt"));
+segmenter.AddWord("机器学习", tag: "n");
+segmenter.DeleteWord("台中"); // 也阻止普通分词的 HMM 再次把它合并
 
-#### 加载词典
-
-* 开发者可以指定自定义的词典，以便包含jieba词库里没有的词。虽然jieba有新词识别能力，但是自行添加新词可以保证更高的正确率
-* `JiebaSegmenter.LoadUserDict("user_dict_file_path")`
-* 词典格式与主词典格式相同，即一行包含：词、词频（可省略）、词性（可省略），用空格隔开
-* 词频省略时，分词器将使用自动计算出的词频保证该词被分出
-
-如
-
-```
-创新办 3 i
-云计算 5
-凱特琳 nz
-台中
-机器学习 3
+var pos = new JiebaNet.Segmenter.PosSeg.PosSegmenter(segmenter);
+var tagged = pos.Cut("机器学习");
 ```
 
-#### 调整词典
+用户词典支持 UTF-8（含或不含 BOM），一行一个词，格式为 `词语 [词频] [词性]`，例如 `机器学习 100 n`、`云计算`、`凱特琳 nz`。无效 UTF-8、溢出的词频和文件读取失败会抛出异常。主词典与用户词典不同：主词典必须提供正整数词频。
 
-* 使用`JiebaSegmenter.AddWord(word, freq=0, tag=null)`可添加一个新词，或调整已知词的词频；若`freq`不是正整数，则使用自动计算出的词频，计算出的词频可保证该词被分出来
-* 使用`JiebaSegmenter.DeleteWord(word)`可移除一个词，使其不能被分出来
+相对用户词典路径相对于当前工作目录解析；`ConfigFileBaseDir` 不改变这个语义，建议总是显式组合绝对路径。同一个词典对象对同一文件只加载一次；修正一次加载失败的文件后可以重试。`AddWord`、`DeleteWord` 只修改内存，不回写文件。
 
-### 3. 关键词提取
+默认的 `new JiebaSegmenter()` 延续原版的进程级共享词典。不同词典需要显式创建：
 
-#### 基于TF-IDF算法的关键词提取
-
-* `JiebaNet.Analyser.TfidfExtractor.ExtractTags(string text, int count = 20, IEnumerable<string> allowPos = null)`可从指定文本中抽取出关键词。
-* `JiebaNet.Analyser.TfidfExtractor.ExtractTagsWithWeight(string text, int count = 20, IEnumerable<string> allowPos = null)`可从指定文本中**抽取关键词的同时得到其权重**。
-* 关键词抽取基于逆向文件频率（IDF），组件内置一个IDF语料库，可以配置为其它自定义的语料库。
-* 关键词抽取会过滤停用词（Stop Words），组件内置一个停用词语料库，这个语料库合并了NLTK的英文停用词和哈工大的中文停用词。
-
-#### 基于TextRank算法的关键词抽取
-
-* `JiebaNet.Analyser.TextRankExtractor`与`TfidfExtractor`相同的接口。需要注意的是，`TextRankExtractor`默认情况下只提取名词和动词。
-* 以固定窗口大小（默认为5，通过Span属性调整）和词之间的共现关系构建图
-
-### 4. 词性标注
-
-* `JiebaNet.Segmenter.PosSeg.PosSegmenter`类可以在分词的同时，为每个词添加词性标注。
-* 词性标注采用和ictclas兼容的标记法，关于ictclas和jieba中使用的标记法列表，请参考：[词性标记](https://gist.github.com/luw2007/6016931)。
-
-```c#
-var posSeg = new PosSegmenter();
-var s = "一团硕大无朋的高能离子云，在遥远而神秘的太空中迅疾地飘移";
-
-var tokens = posSeg.Cut(s);
-Console.WriteLine(string.Join(" ", tokens.Select(token => string.Format("{0}/{1}", token.Word, token.Flag))));
+```csharp
+var first = new JiebaSegmenter(WordDictionary.Create());
+var second = new JiebaSegmenter(WordDictionary.Create());
+first.LoadUserDict("first.txt");
+second.LoadUserDict("second.txt");
+// 两者增删词、词性与用户词典加载记录相互隔离。
+// 也可 WordDictionary.Create("/absolute/path/to/main-dict.txt") 指定独立主词典。
 ```
 
-```
-一团/m 硕大无朋/i 的/uj 高能/n 离子/n 云/ns ，/x 在/p 遥远/a 而/c 神秘/a 的/uj 太空/n 中/f 迅疾/z 地/uv 飘移/v
-```
+独立词典拥有自己的 Trie，因而需要额外词典内存；HMM 模型仍共享。**N100 上的 VideoCleaner 建议注册并复用一个分词器实例**，在启动时加载用户词典，避免为每个文件或请求创建独立词典。`CutInParallel` 等并行 API 是显式选择；普通 `Cut` 不启动并行任务。增删词与读取使用读写锁，单次分词不会读到一半更新的词典。
 
-### 5. Tokenize：返回词语在原文的起止位置
+包含空格的短语或忽略大小写的关键词匹配可用 `KeywordProcessor`，不改变中文分词算法的默认边界规则：
 
-* 默认模式
-
-```c#
-var segmenter = new JiebaSegmenter();
-var s = "永和服装饰品有限公司";
-var tokens = segmenter.Tokenize(s);
-foreach (var token in tokens)
-{
-    Console.WriteLine("word {0,-12} start: {1,-3} end: {2,-3}", token.Word, token.StartIndex, token.EndIndex);
-}
+```csharp
+var keywords = new KeywordProcessor();
+keywords.AddKeywords(new[] { ".NET Core", "Mac OS X", "从前", "有座", "从前山" });
+var matches = keywords.ExtractKeywords("从前有座从前山");
+// 从前 / 有座 / 从前山；采用最长、非重叠匹配。
 ```
 
-```
-word 永和           start: 0   end: 2
-word 服装           start: 2   end: 4
-word 饰品           start: 4   end: 6
-word 有限公司         start: 6   end: 10
-```
+## 关键词提取
 
-* 搜索模式
-
-```c#
-var segmenter = new JiebaSegmenter();
-var s = "永和服装饰品有限公司";
-var tokens = segmenter.Tokenize(s, TokenizerMode.Search);
-foreach (var token in tokens)
-{
-    Console.WriteLine("word {0,-12} start: {1,-3} end: {2,-3}", token.Word, token.StartIndex, token.EndIndex);
-}
+```csharp
+using JiebaNet.Analyser;
+var tfidf = new TfidfExtractor(segmenter);
+var tags = tfidf.ExtractTagsWithWeight("北京清华大学自然语言处理研究");
+var rank = new TextRankExtractor(segmenter);
+var nouns = rank.ExtractTags("北京清华大学自然语言处理研究", allowPos: new[] { "n", "ns" });
 ```
 
-```
-word 永和           start: 0   end: 2
-word 服装           start: 2   end: 4
-word 饰品           start: 4   end: 6
-word 有限           start: 6   end: 8
-word 公司           start: 8   end: 10
-word 有限公司         start: 6   end: 10
-```
+`SetStopWords(path)` 替换停用词集合，`AddStopWord(word)` 添加单个停用词。`SetIdfPath(path)` 替换 IDF 数据。配置更新失败会保留先前有效的数据；建议在开始提供服务之前完成这些配置。
 
-### 6. 并行分词
+本分支保留原 C# 版的中文停用词，以及较宽的 TextRank 默认词性集合；与 Python 对照时显式统一停用词和词性过滤条件。TF-IDF 权重不是单纯的词频，不能把其排序当作 Counter 的词频排序。
 
-使用如下方法：
+## 外部默认资源
 
-* `JiebaSegmenter.CutInParallel()`、`JiebaSegmenter.CutForSearchInParallel()`
-* `PosSegmenter.CutInParallel()`
+通常不需要设置。如果确实要替换默认模型，在任何资源首次读取之前设置：
 
-### 7. 与Lucene.NET的集成
-
-jiebaForLuceneNet项目提供了与Lucene.NET的简单集成，更多信息请看：[jiebaForLuceneNet](https://github.com/anderscui/jiebaForLuceneNet/wiki/%E4%B8%8ELucene.NET%E7%9A%84%E9%9B%86%E6%88%90)
-
-### 8. 其它词典
-
-jieba分词亦提供了其它的词典文件：
-
-* 占用内存较小的词典文件 [https://raw.githubusercontent.com/anderscui/jieba.NET/master/ExtraDicts/dict.txt.small](https://raw.githubusercontent.com/anderscui/jieba.NET/master/ExtraDicts/dict.txt.small)
-* 支持繁体分词更好的词典文件 [https://raw.githubusercontent.com/anderscui/jieba.NET/master/ExtraDicts/dict.txt.big](https://raw.githubusercontent.com/anderscui/jieba.NET/master/ExtraDicts/dict.txt.big)
-
-### 9. 分词速度
-
-* 全模式：2.5 MB/s
-* 精确模式：1.1 MB/s
-* 测试环境： Intel(R) Core(TM) i3-2120 CPU @ 3.30GHz；围城.txt（734KB）
-
-### 10. 命令行分词
-
-Segmenter.Cli项目build之后得到jiebanet.ext，它的选项和实例用法如下：
-
-```shell
--f       --file          the file name, (必要的).
--d       --delimiter     the delimiter between tokens, default: / .
--a       --cut-all       use cut_all mode.
--n       --no-hmm        don't use HMM.
--p       --pos           enable POS tagging.
--v       --version       show version info.
--h       --help          show help details.
-
-sample usages:
-$ jiebanet -f input.txt > output.txt
-$ jiebanet -d | -f input.txt > output.txt
-$ jiebanet -p -f input.txt > output.txt
+```csharp
+ConfigManager.ConfigFileBaseDir = Path.Combine(AppContext.BaseDirectory, "jieba-data");
 ```
 
-### 11. 词频统计
+显式目录必须包含所用功能需要的资源，缺失时明确失败；不会悄悄退回内嵌模型。初始化后更改目录会抛出异常，防止词典和模型混用。原来的 app.config/web.config 配置项已移除。路径属性默认表示资源的逻辑名称；读取内嵌资源使用 `ConfigManager.OpenRead` 或 `ReadLines`，不能假定磁盘上存在同名文件。
 
-可以使用`Counter`类统计词频，其实现来自Python标准库的Counter类（具体接口和实现细节略有不同），用法大致是：
+## 命令行与 N100 性能
 
-```c#
-var s = "在数学和计算机科学之中，算法（algorithm）为任何良定义的具体计算步骤的一个序列，常用于计算、数据处理和自动推理。精确而言，算法是一个表示为有限长列表的有效方法。算法应包含清晰定义的指令用于计算函数。";
-var seg = new JiebaSegmenter();
-var freqs = new Counter<string>(seg.Cut(s));
-foreach (var pair in freqs.MostCommon(5))
-{
-    Console.WriteLine($"{pair.Key}: {pair.Value}");
-}
+```powershell
+dotnet run --project src/Segmenter.Cli -c Release -- --file input.txt
+dotnet run --project src/Segmenter.Cli -c Release -- --file input.txt --no-hmm --delimiter '|'
+./scripts/benchmark.ps1
 ```
 
-输出：
+命令行逐行读取，正常退出后不等待回车；错误输出到 stderr，参数错误返回 2，运行/文件错误返回 1。`--help` 显示全部选项。
 
-```bash
-的: 4
-，: 3
-算法: 3
-计算: 3
-。: 3
-```
+性能工具使用固定的 16 个媒体文件名，默认每轮 20,000 次单线程调用，5 轮取中位数，每种模式默认启动 3 个独立进程；先预热 50,000 次并等待 1 秒。本次 N100 报告使用每轮 100,000 次的长采样。冷调用、初始化后托管内存、工作集、吞吐和每文件分配量分别记录。见 [迁移与验证记录](docs/modernization.md)、[Python 对照](docs/python-parity.md) 和 [上游 issue 对照](docs/upstream-issues.md)。
 
-`Counter`类可通过`Add`，`Subtract`和`Union`方法进行修改，最后以`MostCommon`方法获得频率最高的若干词。具体用法可见测试用例。
+本分支不支持旧 .NET Framework/.NET Core 2.x，也不声称支持 Native AOT、裁剪、日语/韩语形态分析或 Paddle 模式。默认模型内嵌已验证适用于普通和非裁剪单文件发布。
 
-### 12. KeywordProcessor
+## 致谢与授权
 
-可通过 `KeywordProcessor` 提取文本中的关键词，不过它的提取与 `KeywordExtractor`不同。`KeywordProcessor` 可理解为基于词典从文本中找出已知的词，仅仅如此。
-
-jieba分词当前的实现里，不能处理忽略大小写、含空格的词之类的情况，而在**文本提取**应用中，这是很常见的场景。因此 `KeywordProcessor` 主要是作为提取之用，而非分词，尽管通过其中的方法，可以实现另一种基于字典的分词模式。
-
-代码示例：
-
-```c#
-var kp = new KeywordProcessor();
-kp.AddKeywords(new []{".NET Core", "Java", "C语言", "字典 tree", "CET-4", "网络 编程"});
-
-var keywords = kp.ExtractKeywords("你需要通过cet-4考试，学习c语言、.NET core、网络 编程、JavaScript，掌握字典 tree的用法");
-
-// keywords 值为：
-// new List<string> { "CET-4", "C语言", ".NET Core", "网络 编程", "字典 tree"}
-
-// 可以看到，结果中的词与开始添加的关键词相同，与输入句子中的词则不尽相同。如果需要返回句中找到的原词，可以使用 `raw` 参数。
-
-var keywords = kp.ExtractKeywords("你需要通过cet-4考试，学习c语言、.NET core、网络 编程、JavaScript，掌握字典 tree的用法", raw: true);
-
-// keywords 值为：
-// new List<string> { "cet-4", "c语言", ".NET core", "网络 编程", "字典 tree"}
-```
-
-
+原 C# 实现来自 anderscui/jieba.NET，算法和词典来自 fxsjy/jieba。保留原 MIT LICENSE；本次改造不改变其授权要求。

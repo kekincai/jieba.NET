@@ -9,86 +9,56 @@ using JiebaNet.Segmenter.Common;
 
 namespace JiebaNet.Segmenter.PosSeg
 {
-    public class PosSegmenter
+    public partial class PosSegmenter
     {
-        private static readonly WordDictionary WordDict = WordDictionary.Instance;
-        private static readonly Viterbi PosSeg = Viterbi.Instance;
+        [GeneratedRegex(@"([\u4E00-\u9FD5a-zA-Z0-9+#&\._]+)")]
+        private static partial Regex CreateRegexChineseInternal();
 
-        // TODO: 
-        private static readonly object locker = new object();
+        [GeneratedRegex(@"(\r\n|\s)")]
+        private static partial Regex CreateRegexSkipInternal();
+
+        [GeneratedRegex(@"([\u4E00-\u9FD5]+)")]
+        private static partial Regex CreateRegexChineseDetail();
+
+        [GeneratedRegex(@"([\.0-9]+|[a-zA-Z0-9]+)")]
+        private static partial Regex CreateRegexSkipDetail();
+
+        [GeneratedRegex(@"[a-zA-Z0-9]+")]
+        private static partial Regex CreateRegexEnglishWords();
+
+        [GeneratedRegex(@"[\.0-9]+")]
+        private static partial Regex CreateRegexNumbers();
+
+        [GeneratedRegex(@"^[a-zA-Z0-9]$")]
+        private static partial Regex CreateRegexEnglishChar();
+
+        private readonly WordDictionary WordDict;
+        private static Viterbi PosSeg => Viterbi.Instance;
 
         #region Regular Expressions
 
-        internal static readonly Regex RegexChineseInternal = new Regex(@"([\u4E00-\u9FD5a-zA-Z0-9+#&\._%·\-]+)", RegexOptions.Compiled);
-        internal static readonly Regex RegexSkipInternal = new Regex(@"(\r\n|\s)", RegexOptions.Compiled);
+        internal static readonly Regex RegexChineseInternal = CreateRegexChineseInternal();
+        internal static readonly Regex RegexSkipInternal = CreateRegexSkipInternal();
 
-        internal static readonly Regex RegexChineseDetail = new Regex(@"([\u4E00-\u9FD5]+)", RegexOptions.Compiled);
-        internal static readonly Regex RegexSkipDetail = new Regex(@"([\.0-9]+|[a-zA-Z0-9]+)", RegexOptions.Compiled);
+        internal static readonly Regex RegexChineseDetail = CreateRegexChineseDetail();
+        internal static readonly Regex RegexSkipDetail = CreateRegexSkipDetail();
 
-        internal static readonly Regex RegexEnglishWords = new Regex(@"[a-zA-Z0-9]+", RegexOptions.Compiled);
-        internal static readonly Regex RegexNumbers = new Regex(@"[\.0-9]+", RegexOptions.Compiled);
+        internal static readonly Regex RegexEnglishWords = CreateRegexEnglishWords();
+        internal static readonly Regex RegexNumbers = CreateRegexNumbers();
 
-        internal static readonly Regex RegexEnglishChar = new Regex(@"^[a-zA-Z0-9]$", RegexOptions.Compiled);
+        internal static readonly Regex RegexEnglishChar = CreateRegexEnglishChar();
 
         #endregion
 
-        private static IDictionary<string, string> _wordTagTab;
+        private readonly JiebaSegmenter _segmenter;
 
-        static PosSegmenter()
-        {
-            LoadWordTagTab();
-        }
-
-        private static void LoadWordTagTab()
-        {
-            try
-            {
-                _wordTagTab = new Dictionary<string, string>();
-                var lines = File.ReadAllLines(ConfigManager.MainDictFile, Encoding.UTF8);
-                foreach (var line in lines)
-                {
-                    var tokens = line.Split(' ');
-                    if (tokens.Length < 2)
-                    {
-                        Debug.Fail(string.Format("Invalid line: {0}", line));
-                        continue;
-                    }
-
-                    var word = tokens[0];
-                    var tag = tokens[2];
-
-                    _wordTagTab[word] = tag;
-                }
-            }
-            catch (IOException e)
-            {
-                Debug.Fail(string.Format("Word tag table load failure, reason: {0}", e.Message));
-            }
-            catch (FormatException fe)
-            {
-                Debug.Fail(fe.Message);
-            }
-        }
-
-        private JiebaSegmenter _segmenter;
-
-        public PosSegmenter()
-        {
-            _segmenter = new JiebaSegmenter();
-        }
+        public PosSegmenter() : this(new JiebaSegmenter()) { }
 
         public PosSegmenter(JiebaSegmenter segmenter)
         {
-            _segmenter = segmenter;
-        }
-
-        private void CheckNewUserWordTags()
-        {
-            if (_segmenter.UserWordTagTab.IsNotEmpty())
-            {
-                _wordTagTab.Update(_segmenter.UserWordTagTab);
-                _segmenter.UserWordTagTab = new Dictionary<string, string>();
-            }
+            _segmenter = segmenter ?? throw new ArgumentNullException(nameof(segmenter));
+            WordDict = segmenter.Dictionary;
+            WordDict.EnsureTagsLoaded();
         }
 
         public IEnumerable<Pair> Cut(string text, bool hmm = true)
@@ -111,7 +81,8 @@ namespace JiebaNet.Segmenter.PosSeg
 
         internal IEnumerable<Pair> CutInternal(string text, bool hmm = true)
         {
-            CheckNewUserWordTags();
+            ArgumentNullException.ThrowIfNull(text);
+            using var scope = WordDict.Read();
 
             var blocks = RegexChineseInternal.Split(text);
             Func<string, IEnumerable<Pair>> cutMethod = null;
@@ -142,7 +113,7 @@ namespace JiebaNet.Segmenter.PosSeg
                         }
                         else
                         {
-                            foreach (var xx in x)
+                            foreach (var xx in x.EnumerateRunes())
                             {
                                 // TODO: each char?
                                 var xxs = xx.ToString();
@@ -192,7 +163,7 @@ namespace JiebaNet.Segmenter.PosSeg
                         AddBufferToWordList(tokens, buf);
                         buf = string.Empty;
                     }
-                    tokens.Add(new Pair(w, _wordTagTab.GetDefault(w, "x")));
+                    tokens.Add(new Pair(w, WordDict.Tags.GetDefault(w, "x")));
                 }
                 x = y;
             }
@@ -234,7 +205,7 @@ namespace JiebaNet.Segmenter.PosSeg
                         tokens.Add(new Pair(buf, "eng"));
                         buf = string.Empty;
                     }
-                    tokens.Add(new Pair(w, _wordTagTab.GetDefault(w, "x")));
+                    tokens.Add(new Pair(w, WordDict.Tags.GetDefault(w, "x")));
                     x = y;
                 }
             }
@@ -264,7 +235,7 @@ namespace JiebaNet.Segmenter.PosSeg
                     {
                         if (!string.IsNullOrWhiteSpace(x))
                         {
-                            if (RegexNumbers.IsMatch(x))
+                            if (RegexNumbers.Match(x) is { Success: true, Index: 0 })
                             {
                                 tokens.Add(new Pair(x, "m"));
                             }
@@ -292,7 +263,7 @@ namespace JiebaNet.Segmenter.PosSeg
         {
             if (buf.Length == 1)
             {
-                words.Add(new Pair(buf, _wordTagTab.GetDefault(buf, "x")));
+                words.Add(new Pair(buf, WordDict.Tags.GetDefault(buf, "x")));
             }
             else
             {
@@ -303,7 +274,7 @@ namespace JiebaNet.Segmenter.PosSeg
                 }
                 else
                 {
-                    words.AddRange(buf.Select(ch => new Pair(ch.ToString(), "x")));
+                    words.AddRange(buf.Select(ch => new Pair(ch.ToString(), WordDict.Tags.GetDefault(ch.ToString(), "x"))));
                 }
             }
         }

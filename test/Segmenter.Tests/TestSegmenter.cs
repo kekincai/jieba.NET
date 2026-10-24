@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -364,13 +364,13 @@ namespace JiebaNet.Segmenter.Tests
         {
             var seg = new JiebaSegmenter();
             var text = "HighestDegree";
-            CollectionAssert.AreEqual(new[] { text }, seg.Cut(text));
+            Assert.That(seg.Cut(text), Is.EqualTo(new[] { text }));
             text = "HelloWorld";
-            CollectionAssert.AreEqual(new[] { text }, seg.Cut(text));
+            Assert.That(seg.Cut(text), Is.EqualTo(new[] { text }));
             text = "HelloWorldle";
-            CollectionAssert.AreEqual(new[] { text }, seg.Cut(text));
+            Assert.That(seg.Cut(text), Is.EqualTo(new[] { text }));
             text = "HelloWorldlee";
-            CollectionAssert.AreEqual(new[] { text }, seg.Cut(text));
+            Assert.That(seg.Cut(text), Is.EqualTo(new[] { text }));
         }
 
         [Test]

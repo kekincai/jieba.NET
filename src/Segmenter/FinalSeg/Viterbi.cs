@@ -6,17 +6,22 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using JiebaNet.Segmenter.Common;
-using Newtonsoft.Json;
 
 namespace JiebaNet.Segmenter.FinalSeg
 {
-    public class Viterbi : IFinalSeg
+    public partial class Viterbi : IFinalSeg
     {
+        [GeneratedRegex(@"([\u4E00-\u9FD5]+)")]
+        private static partial Regex CreateRegexChinese();
+
+        [GeneratedRegex(@"([a-zA-Z0-9]+(?:\.\d+)?%?)")]
+        private static partial Regex CreateRegexSkip();
+
         private static readonly Lazy<Viterbi> Lazy = new Lazy<Viterbi>(() => new Viterbi());
         private static readonly char[] States = { 'B', 'M', 'E', 'S' };
 
-        private static readonly Regex RegexChinese = new Regex(@"([\u4E00-\u9FD5]+)", RegexOptions.Compiled);
-        private static readonly Regex RegexSkip = new Regex(@"([a-zA-Z0-9]+(?:\.\d+)?%?)", RegexOptions.Compiled);
+        private static readonly Regex RegexChinese = CreateRegexChinese();
+        private static readonly Regex RegexSkip = CreateRegexSkip();
 
         private static IDictionary<char, IDictionary<char, double>> _emitProbs;
         private static IDictionary<char, double> _startProbs;
@@ -28,20 +33,28 @@ namespace JiebaNet.Segmenter.FinalSeg
             LoadModel();
         }
 
-        // TODO: synchronized
         public static Viterbi Instance
         {
             get { return Lazy.Value; }
         }
 
-        public IEnumerable<string> Cut(string sentence)
+        public IEnumerable<string> Cut(string sentence) => Cut(sentence, WordDictionary.Instance);
+
+        internal IEnumerable<string> Cut(string sentence, WordDictionary dictionary)
         {
+            ArgumentNullException.ThrowIfNull(sentence);
+            using var scope = dictionary.Read();
             var tokens = new List<string>();
             foreach (var blk in RegexChinese.Split(sentence))
             {
                 if (RegexChinese.IsMatch(blk))
                 {
-                    tokens.AddRange(ViterbiCut(blk));
+                    foreach (var word in ViterbiCut(blk))
+                    {
+                        if (dictionary.ForceSplitWords.Contains(word))
+                            tokens.AddRange(word.EnumerateRunes().Select(rune => rune.ToString()));
+                        else tokens.Add(word);
+                    }
                 }
                 else
                 {
@@ -75,11 +88,9 @@ namespace JiebaNet.Segmenter.FinalSeg
                 {'S', -1.4652633398537678}
             };
 
-            var transJson = File.ReadAllText(Path.GetFullPath(ConfigManager.ProbTransFile));
-            _transProbs = JsonConvert.DeserializeObject<IDictionary<char, IDictionary<char, double>>>(transJson);
+            _transProbs = ModelJson.Load<IDictionary<char, IDictionary<char, double>>>(ConfigManager.ProbTransFile);
 
-            var emitJson = File.ReadAllText(Path.GetFullPath(ConfigManager.ProbEmitFile));
-            _emitProbs = JsonConvert.DeserializeObject<IDictionary<char, IDictionary<char, double>>>(emitJson);
+            _emitProbs = ModelJson.Load<IDictionary<char, IDictionary<char, double>>>(ConfigManager.ProbEmitFile);
 
             stopWatch.Stop();
             Debug.WriteLine("model loading finished, time elapsed {0} ms.", stopWatch.ElapsedMilliseconds);
@@ -114,7 +125,7 @@ namespace JiebaNet.Segmenter.FinalSeg
                     {
                         var tranp = _transProbs[y0].GetDefault(y, Constants.MinProb);
                         tranp = v[i - 1][y0] + tranp + emp;
-                        if (candidate.Freq <= tranp)
+                        if (candidate.Freq < tranp || (candidate.Freq == tranp && candidate.Key < y0))
                         {
                             candidate.Freq = tranp;
                             candidate.Key = y0;
@@ -128,7 +139,7 @@ namespace JiebaNet.Segmenter.FinalSeg
 
             var probE = v[sentence.Length - 1]['E'];
             var probS = v[sentence.Length - 1]['S'];
-            var finalPath = probE < probS ? path['S'] : path['E'];
+            var finalPath = probE <= probS ? path['S'] : path['E'];
 
             var posList = new List<char>(sentence.Length);
             while (finalPath != null)

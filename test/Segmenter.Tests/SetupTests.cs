@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Reflection;
 using NUnit.Framework;
@@ -14,7 +14,7 @@ namespace JiebaNet.Segmenter.Tests
             var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             Directory.SetCurrentDirectory(dir);
 
-            ConfigManager.ConfigFileBaseDir = @"/Users/andersc/dev/lib/jiebanet";
+
         }
 
         [OneTimeTearDown]

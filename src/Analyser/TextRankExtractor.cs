@@ -22,14 +22,14 @@ namespace JiebaNet.Analyser
         {
             return allowPos.Contains(wp.Flag)
                    && wp.Word.Trim().Length >= 2
-                   && !StopWords.Contains(wp.Word.ToLower());
+                   && !StopWords.Contains(wp.Word.ToLowerInvariant());
         }
 
-        public TextRankExtractor()
+        public TextRankExtractor(JiebaSegmenter segmenter = null)
         {
             Span = 5;
 
-            Segmenter = new JiebaSegmenter();
+            Segmenter = segmenter ?? new JiebaSegmenter();
             PosSegmenter = new PosSegmenter(Segmenter);
             SetStopWords(ConfigManager.StopWordsFile);
             if (StopWords.IsEmpty())

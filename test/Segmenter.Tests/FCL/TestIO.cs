@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -6,8 +6,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using JiebaNet.Segmenter.Common;
 using NUnit.Framework;
-using NUnit.Framework.Internal;
-using OSPlatform = NUnit.Framework.Internal.OSPlatform;
 
 namespace JiebaNet.Segmenter.Tests.FCL
 {
@@ -59,7 +57,7 @@ namespace JiebaNet.Segmenter.Tests.FCL
             var stopWatch = new Stopwatch();
             stopWatch.Start();
 
-            var lines = File.ReadAllLines(filePath, Encoding.UTF8);
+            var lines = ConfigManager.ReadLines(filePath).ToArray();
             foreach (var line in lines)
             {
                 var tokens = line.Split(' ');
@@ -86,7 +84,7 @@ namespace JiebaNet.Segmenter.Tests.FCL
             var stopWatch = new Stopwatch();
             stopWatch.Start();
 
-            using (var sr = new StreamReader(filePath, Encoding.UTF8))
+            using (var sr = new StreamReader(ConfigManager.OpenRead(filePath), Encoding.UTF8))
             {
                 string line = null;
                 while ((line = sr.ReadLine()) != null)

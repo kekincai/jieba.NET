@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using JiebaNet.Segmenter;
 
 namespace JiebaNet.Analyser
 {
@@ -16,17 +17,9 @@ namespace JiebaNet.Analyser
 
         public void SetStopWords(string stopWordsFile)
         {
-            StopWords = new HashSet<string>();
-
-            var path = Path.GetFullPath(stopWordsFile);
-            if (File.Exists(path))
-            {
-                var lines = File.ReadAllLines(path);
-                foreach (var line in lines)
-                {
-                    StopWords.Add(line.Trim());
-                }
-            }
+            var words = new HashSet<string>(System.StringComparer.Ordinal);
+            foreach (var line in ConfigManager.ReadLines(stopWordsFile)) words.Add(line.Trim());
+            StopWords = words;
         }
 
         public void AddStopWord(string word)

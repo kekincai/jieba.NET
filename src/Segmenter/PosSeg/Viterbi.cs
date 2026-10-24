@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using JiebaNet.Segmenter.Common;
-using Newtonsoft.Json;
 
 namespace JiebaNet.Segmenter.PosSeg
 {
@@ -21,7 +20,6 @@ namespace JiebaNet.Segmenter.PosSeg
             LoadModel();
         }
 
-        // TODO: synchronized
         public static Viterbi Instance
         {
             get { return Lazy.Value; }
@@ -64,17 +62,13 @@ namespace JiebaNet.Segmenter.PosSeg
 
         private static void LoadModel()
         {
-            var startJson = File.ReadAllText(Path.GetFullPath(ConfigManager.PosProbStartFile));
-            _startProbs = JsonConvert.DeserializeObject<IDictionary<string, double>>(startJson);
+            _startProbs = ModelJson.Load<IDictionary<string, double>>(ConfigManager.PosProbStartFile);
 
-            var transJson = File.ReadAllText(Path.GetFullPath(ConfigManager.PosProbTransFile));
-            _transProbs = JsonConvert.DeserializeObject<IDictionary<string, IDictionary<string, double>>>(transJson);
+            _transProbs = ModelJson.Load<IDictionary<string, IDictionary<string, double>>>(ConfigManager.PosProbTransFile);
 
-            var emitJson = File.ReadAllText(Path.GetFullPath(ConfigManager.PosProbEmitFile));
-            _emitProbs = JsonConvert.DeserializeObject<IDictionary<string, IDictionary<char, double>>>(emitJson);
+            _emitProbs = ModelJson.Load<IDictionary<string, IDictionary<char, double>>>(ConfigManager.PosProbEmitFile);
 
-            var tabJson = File.ReadAllText(Path.GetFullPath(ConfigManager.CharStateTabFile));
-            _stateTab = JsonConvert.DeserializeObject<IDictionary<char, List<string>>>(tabJson);
+            _stateTab = ModelJson.Load<IDictionary<char, List<string>>>(ConfigManager.CharStateTabFile);
         }
 
         // TODO: change sentence to obs?
@@ -123,17 +117,17 @@ namespace JiebaNet.Segmenter.PosSeg
                 {
                     var emp = _emitProbs[y].GetDefault(sentence[i], Constants.MinProb);
 
-                    var prob = double.MinValue;
+                    var prob = double.NegativeInfinity;
                     var state = string.Empty;
 
                     foreach (var y0 in prevStates)
                     {
-                        var tranp = _transProbs[y0].GetDefault(y, double.MinValue);
+                        var tranp = _transProbs[y0].GetDefault(y, double.NegativeInfinity);
                         tranp = v[i - 1][y0] + tranp + emp;
                         // TODO: compare two very small values;
                         // TODO: how to deal with negative infinity
                         if (prob < tranp ||
-                            (prob == tranp && string.Compare(state, y0, StringComparison.InvariantCulture) < 0))
+                            (prob == tranp && string.Compare(state, y0, StringComparison.Ordinal) < 0))
                         {
                             prob = tranp;
                             state = y0;
@@ -146,13 +140,13 @@ namespace JiebaNet.Segmenter.PosSeg
 
             var vLast = v.Last();
             var last = memPath.Last().Keys.Select(y => new {State = y, Prob = vLast[y]});
-            var endProb = double.MinValue;
+            var endProb = double.NegativeInfinity;
             var endState = string.Empty;
             foreach (var endPoint in last)
             {
                 // TODO: compare two very small values;
                 if (endProb < endPoint.Prob || 
-                    (endProb == endPoint.Prob && String.Compare(endState, endPoint.State, StringComparison.InvariantCulture) < 0))
+                    (endProb == endPoint.Prob && String.Compare(endState, endPoint.State, StringComparison.Ordinal) < 0))
                 {
                     endProb = endPoint.Prob;
                     endState = endPoint.State;

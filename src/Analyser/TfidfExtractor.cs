@@ -13,7 +13,7 @@ namespace JiebaNet.Analyser
         private static readonly int DefaultWordCount = 20;
 
         private JiebaSegmenter Segmenter { get; set; }
-        private PosSegmenter PosSegmenter { get; set; }
+        private Lazy<PosSegmenter> PosSegmenter { get; set; }
         private IdfLoader Loader { get; set; }
 
         private IDictionary<string, double> IdfFreq { get; set; }
@@ -22,7 +22,7 @@ namespace JiebaNet.Analyser
         public TfidfExtractor(JiebaSegmenter segmenter = null)
         {
             Segmenter = segmenter.IsNull() ? new JiebaSegmenter() : segmenter;
-            PosSegmenter = new PosSegmenter(Segmenter);
+            PosSegmenter = new Lazy<PosSegmenter>(() => new PosSegmenter(Segmenter));
             SetStopWords(ConfigManager.StopWordsFile);
             if (StopWords.IsEmpty())
             {
@@ -44,8 +44,14 @@ namespace JiebaNet.Analyser
 
         private IEnumerable<string> FilterCutByPos(string text, IEnumerable<string> allowPos)
         {
-            var posTags = PosSegmenter.Cut(text).Where(p => allowPos.Contains(p.Flag));
+            var posTags = PosSegmenter.Value.Cut(text).Where(p => allowPos.Contains(p.Flag));
             return posTags.Select(p => p.Word);
+        }
+
+        private static bool IsSingleCharacter(string word)
+        {
+            var text = word.AsSpan().Trim();
+            return text.Length < 2 || (text.Length == 2 && char.IsSurrogatePair(text[0], text[1]));
         }
 
         private IDictionary<string, double> GetWordIfidf(string text, IEnumerable<string> allowPos)
@@ -65,7 +71,7 @@ namespace JiebaNet.Analyser
             foreach (var word in words)
             {
                 var w = word;
-                if (string.IsNullOrEmpty(w) || w.Trim().Length < 2 || StopWords.Contains(w.ToLower()))
+                if (string.IsNullOrEmpty(w) || IsSingleCharacter(w) || StopWords.Contains(w.ToLowerInvariant()))
                 {
                     continue;
                 }
