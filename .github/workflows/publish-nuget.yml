@@ -1,0 +1,52 @@
+name: Publish NuGet
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: publish-nuget
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check release version
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = [string]$props.Project.PropertyGroup.Version
+          if ($env:GITHUB_REF_NAME -cne "v$version") {
+            throw "Tag must match Directory.Build.props Version: v$version"
+          }
+      - name: Build, test, audit and verify packages
+        shell: pwsh
+        run: ./scripts/verify.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nuget-release-packages
+          path: artifacts/packages/*.nupkg
+          if-no-files-found: error
+      - name: NuGet login
+        uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e # v1
+        id: login
+        with:
+          user: kekincai
+      - name: Publish packages
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = [string]$props.Project.PropertyGroup.Version
+          foreach ($id in @('Kekincai.JiebaNet.Segmenter', 'Kekincai.JiebaNet.Analyser')) {
+            dotnet nuget push "artifacts/packages/$id.$version.nupkg" --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE) { throw "Publishing $id failed." }
+          }

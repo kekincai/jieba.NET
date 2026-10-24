@@ -171,7 +171,9 @@ dotnet restore --packages artifacts/nuget-clean-check
 
 多个项目或外部使用者开始使用后，推荐把本库正式发布到 NuGet.org，应用只保留 PackageReference，不再提交二进制包。发布本身需要先准备 NuGet.org 账号并确认包名可用；目前本库仅有本地产物，不能假定示例版本已能从 NuGet.org 安装。
 
-本库维护者可按以下流程发布：
+本库已配置账号 `kekincai` 的 GitHub OIDC 发布流程，首次使用需创建 NuGet.org 可信发布策略，具体字段及标签发布步骤见 [NuGet 发布说明](publishing.md)。
+
+本库维护者也可按以下流程手动发布：
 
 1. 修改并固定版本，运行本库验证，确认对应 commit 和两个 `.nupkg`。
 2. 使用 NuGet.org 上传页面发布 Segmenter，再发布依赖它的 Analyser；或使用配置好的发布凭据运行 `dotnet nuget push`。
